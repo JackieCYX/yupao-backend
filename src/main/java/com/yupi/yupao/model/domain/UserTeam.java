@@ -1,18 +1,18 @@
 package com.yupi.yupao.model.domain;
 
 import com.baomidou.mybatisplus.annotation.*;
+import lombok.Data;
 
 import java.io.Serializable;
 import java.util.Date;
-import lombok.Data;
 
 /**
- * 标签
- * @TableName tag
+ * 用户队伍关系
+ * @TableName user_team
  */
-@TableName(value ="tag")
+@TableName(value ="user_team")
 @Data
-public class Tag implements Serializable {
+public class UserTeam implements Serializable {
     /**
      * id
      */
@@ -20,28 +20,22 @@ public class Tag implements Serializable {
     private Long id;
 
     /**
-     * 标签名称
-     */
-    @TableField(value = "tagName")
-    private String tagName;
-
-    /**
-     * 用户 id
+     * 用户id
      */
     @TableField(value = "userId")
     private Long userId;
 
     /**
-     * 父标签 id
+     * 队伍id
      */
-    @TableField(value = "parentId")
-    private Long parentId;
+    @TableField(value = "teamId")
+    private Long teamId;
 
     /**
-     * 0 - 不是, 1 - 父标签
+     * 加入时间
      */
-    @TableField(value = "isParent")
-    private Integer isParent;
+    @TableField(value = "joinTime")
+    private Date joinTime;
 
     /**
      * 创建时间
@@ -58,8 +52,8 @@ public class Tag implements Serializable {
     /**
      * 是否删除
      */
-    @TableField(value = "isDelete")
     @TableLogic
+    @TableField(value = "isDelete")
     private Integer isDelete;
 
     @TableField(exist = false)

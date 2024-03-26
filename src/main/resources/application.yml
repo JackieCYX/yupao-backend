@@ -23,7 +23,7 @@ spring:
     database: 1
     password: 19990924
 server:
-  port: 8080
+  port: 8088
   servlet:
     context-path: /api
     session:

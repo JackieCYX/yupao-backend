@@ -5,6 +5,8 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.yupi.yupao.model.domain.User;
 import com.yupi.yupao.service.UserService;
 import lombok.extern.slf4j.Slf4j;
+import org.redisson.api.RLock;
+import org.redisson.api.RedissonClient;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -28,23 +30,42 @@ public class PreCacheJob {
     @Resource
     private RedisTemplate<String, Object> redisTemplate;
 
+    @Resource
+    private RedissonClient redissonClient;
+
     // 重点用户
     private List<Long> mainUserList = Arrays.asList(1L);
 
     // 每天执行，预热推荐用户
     @Scheduled(cron = "0 59 23 * * *")
     public void doCacheRecommendUser() {
-        for (Long userId : mainUserList) {
-            QueryWrapper<User> queryWrapper = new QueryWrapper<>();
-            Page<User> userPage = userService.page(new Page<>(1, 20), queryWrapper);
-            String redisKey = String.format("yupao:user:recommend:%s", userId);
-            ValueOperations<String, Object> valueOperations = redisTemplate.opsForValue();
-            // 写缓存
-            try {
-                valueOperations.set(redisKey, userPage, 30000, TimeUnit.SECONDS);
-            } catch (Exception e) {
-                log.error("redis set key error:", e);
+        RLock lock = redissonClient.getLock("yupao:precachejob:docache:lock");
+        try {
+            // 只有一个线程获取到锁
+            if (lock.tryLock(0,30000, TimeUnit.MILLISECONDS)) {
+                for (Long userId : mainUserList) {
+                    QueryWrapper<User> queryWrapper = new QueryWrapper<>();
+                    Page<User> userPage = userService.page(new Page<>(1, 20), queryWrapper);
+                    String redisKey = String.format("yupao:user:recommend:%s", userId);
+                    ValueOperations<String, Object> valueOperations = redisTemplate.opsForValue();
+                    // 写缓存
+                    try {
+                        valueOperations.set(redisKey, userPage, 30000, TimeUnit.SECONDS);
+                    } catch (Exception e) {
+                        log.error("redis set key error:", e);
+                    }
+                }
+
+            }
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        } finally {
+            // 只能释放自己的锁
+            if (lock.isHeldByCurrentThread()) {
+                lock.unlock();
             }
         }
+
+
     }
 }

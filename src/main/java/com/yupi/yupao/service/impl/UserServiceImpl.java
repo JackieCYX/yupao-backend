@@ -8,7 +8,10 @@ import com.yupi.yupao.common.ErrorCode;
 import com.yupi.yupao.exception.BusinessException;
 import com.yupi.yupao.mapper.UserMapper;
 import com.yupi.yupao.model.domain.User;
+import com.yupi.yupao.model.vo.UserVO;
 import com.yupi.yupao.service.UserService;
+import com.yupi.yupao.utils.AlgorithmUtils;
+import io.swagger.models.auth.In;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Service;
@@ -17,10 +20,7 @@ import org.springframework.util.DigestUtils;
 
 import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Optional;
-import java.util.Set;
+import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -255,6 +255,44 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
     @Override
     public boolean isAdmin(User loginUser) {
         return loginUser != null && loginUser.getUserRole() == ADMIN_ROLE;
+    }
+
+    @Override
+    public List<User> matchUser(long num, User loginUser) {
+        QueryWrapper<User> queryWrapper = new QueryWrapper<>();
+        queryWrapper.select("id", "tags");
+        queryWrapper.isNotNull("tags");
+        List<User> userList = this.list(queryWrapper);
+        String tags = loginUser.getTags();
+        Gson gson = new Gson();
+        List<String> tagList = gson.fromJson(tags, new TypeToken<List<String>>() {
+        }.getType());
+        // 用户列表的下标 => 相似度
+        SortedMap<Integer, Long> indexDistanceMap = new TreeMap<>();
+        for (int i = 0; i < userList.size(); i++) {
+            User user = userList.get(i);
+            String userTags = user.getTags();
+            // 无标签或者为当前用户自己
+            if (StringUtils.isBlank(userTags) || user.getId() == loginUser.getId()) {
+                continue;
+            }
+            List<String> userTagList = gson.fromJson(user.getTags(), new TypeToken<List<String>>() {
+            }.getType());
+            long distance = AlgorithmUtils.minDistance(tagList, userTagList);
+            indexDistanceMap.put(i, distance);
+        }
+        List<User> userVOList = new ArrayList<>();
+        int i = 0;
+        for (Map.Entry<Integer, Long> entry : indexDistanceMap.entrySet()) {
+            if (i > num) {
+                break;
+            }
+            User user = userList.get(i);
+            System.out.println(user.getId() + ":" + entry.getKey() + ":" + entry.getValue());
+            userVOList.add(user);
+            i++;
+        }
+        return userVOList;
     }
 
 }

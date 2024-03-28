@@ -3,32 +3,29 @@ package com.yupi.yupao.controller;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.yupi.yupao.common.BaseResponse;
+import com.yupi.yupao.common.DeleteRequest;
 import com.yupi.yupao.common.ErrorCode;
 import com.yupi.yupao.common.ResultUtils;
 import com.yupi.yupao.exception.BusinessException;
 import com.yupi.yupao.model.domain.Team;
 import com.yupi.yupao.model.domain.User;
+import com.yupi.yupao.model.domain.UserTeam;
 import com.yupi.yupao.model.dto.TeamQuery;
 import com.yupi.yupao.model.request.*;
 import com.yupi.yupao.model.vo.TeamUserVO;
 import com.yupi.yupao.service.TeamService;
 import com.yupi.yupao.service.UserService;
-import lombok.Getter;
+import com.yupi.yupao.service.UserTeamService;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.BeanUtils;
-import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.data.redis.core.ValueOperations;
-import org.springframework.util.CollectionUtils;
 import org.springframework.web.bind.annotation.*;
 
 import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
+import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.TimeUnit;
+import java.util.Map;
 import java.util.stream.Collectors;
-
-import static com.yupi.yupao.constant.UserConstant.USER_LOGIN_STATE;
 
 /**
  * 队伍接口
@@ -44,6 +41,9 @@ public class TeamController {
 
     @Resource
     private UserService userService;
+
+    @Resource
+    private UserTeamService userTeamService;
 
     @PostMapping("/add")
     public BaseResponse<Long> addTeam(@RequestBody TeamAddRequest teamAddRequest, HttpServletRequest request) {
@@ -126,15 +126,59 @@ public class TeamController {
     }
 
     @PostMapping("/delete")
-    public BaseResponse<Boolean> deleteTeam(@RequestBody long id, HttpServletRequest request) {
-        if (id <= 0) {
+    public BaseResponse<Boolean> deleteTeam(@RequestBody DeleteRequest deleteRequest, HttpServletRequest request) {
+        if (deleteRequest == null || deleteRequest.getId() <= 0) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
         }
+        long id = deleteRequest.getId();
         User loginUser = userService.getLoginUser(request);
         boolean result = teamService.deleteTeam(id, loginUser);
         if (!result) {
             throw new BusinessException(ErrorCode.SYSTEM_ERROR, "删除失败");
         }
         return ResultUtils.success(true);
+    }
+
+    /**
+     * 获取我创建的队伍
+     *
+     * @param teamQuery
+     * @param request
+     * @return
+     */
+    @GetMapping("/list/my/create")
+    public BaseResponse<List<TeamUserVO>> listMyCreateTeams(TeamQuery teamQuery, HttpServletRequest request) {
+        if (teamQuery == null) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR);
+        }
+        User loginUser = userService.getLoginUser(request);
+        boolean isAdmin = userService.isAdmin(loginUser);
+        teamQuery.setUserId(loginUser.getId());
+        List<TeamUserVO> teamList = teamService.listTeam(teamQuery, true);
+        return ResultUtils.success(teamList);
+    }
+
+    /**
+     * 获取我加入的队伍
+     *
+     * @param teamQuery
+     * @param request
+     * @return
+     */
+    @GetMapping("/list/my/join")
+    public BaseResponse<List<TeamUserVO>> listMyJoinTeams(TeamQuery teamQuery, HttpServletRequest request) {
+        if (teamQuery == null) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR);
+        }
+        User loginUser = userService.getLoginUser(request);
+        QueryWrapper<UserTeam> queryWrapper = new QueryWrapper<>();
+        queryWrapper.eq("userId", loginUser.getId());
+        List<UserTeam> userTeamList = userTeamService.list(queryWrapper);
+        Map<Long, List<UserTeam>> listMap = userTeamList.stream()
+                .collect(Collectors.groupingBy(UserTeam::getTeamId));
+        List<Long> idList = new ArrayList<>(listMap.keySet());
+        teamQuery.setIdList(idList);
+        List<TeamUserVO> teamList = teamService.listTeam(teamQuery, true);
+        return ResultUtils.success(teamList);
     }
 }

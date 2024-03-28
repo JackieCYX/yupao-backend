@@ -8,12 +8,11 @@ import com.yupi.yupao.common.ErrorCode;
 import com.yupi.yupao.exception.BusinessException;
 import com.yupi.yupao.mapper.UserMapper;
 import com.yupi.yupao.model.domain.User;
-import com.yupi.yupao.model.vo.UserVO;
 import com.yupi.yupao.service.UserService;
 import com.yupi.yupao.utils.AlgorithmUtils;
-import io.swagger.models.auth.In;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.math3.util.Pair;
 import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.DigestUtils;
@@ -268,7 +267,8 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
         List<String> tagList = gson.fromJson(tags, new TypeToken<List<String>>() {
         }.getType());
         // 用户列表的下标 => 相似度
-        SortedMap<Integer, Long> indexDistanceMap = new TreeMap<>();
+        List<Pair<User, Long>> list = new ArrayList<>();
+        // 依次计算所有用户和当前用户的相似度
         for (int i = 0; i < userList.size(); i++) {
             User user = userList.get(i);
             String userTags = user.getTags();
@@ -279,20 +279,26 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
             List<String> userTagList = gson.fromJson(user.getTags(), new TypeToken<List<String>>() {
             }.getType());
             long distance = AlgorithmUtils.minDistance(tagList, userTagList);
-            indexDistanceMap.put(i, distance);
+            list.add(new Pair<>(user, distance));
         }
-        List<User> userVOList = new ArrayList<>();
-        int i = 0;
-        for (Map.Entry<Integer, Long> entry : indexDistanceMap.entrySet()) {
-            if (i > num) {
-                break;
-            }
-            User user = userList.get(i);
-            System.out.println(user.getId() + ":" + entry.getKey() + ":" + entry.getValue());
-            userVOList.add(user);
-            i++;
+        // 按编辑距离由小到大排序
+        List<Pair<User, Long>> topUserList = list.stream()
+                .sorted((a, b) -> (int) (a.getValue() - b.getValue()))
+                .limit(num)
+                .collect(Collectors.toList());
+        // 原本顺序的userId列表
+        List<Long> userIdList = topUserList.stream().map(pair -> pair.getKey().getId()).collect(Collectors.toList());
+        QueryWrapper<User> userQueryWrapper = new QueryWrapper<>();
+        userQueryWrapper.in("id", userIdList);
+        Map<Long, List<User>> userIdUserListMap = this.list(userQueryWrapper)
+                .stream()
+                .map(this::getSafetyUser)
+                .collect(Collectors.groupingBy(User::getId));
+        List<User> finalUserList = new ArrayList<>();
+        for (long userId : userIdList) {
+            finalUserList.add(userIdUserListMap.get(userId).get(0));
         }
-        return userVOList;
+        return finalUserList;
     }
 
 }

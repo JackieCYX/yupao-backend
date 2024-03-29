@@ -122,8 +122,9 @@ public class TeamServiceImpl extends ServiceImpl<TeamMapper, Team>
     }
 
     @Override
-    public List<TeamUserVO> listTeam(TeamQuery teamQuery, boolean isAdmin) {
+    public List<TeamUserVO> listTeams(TeamQuery teamQuery, boolean isAdmin) {
         QueryWrapper<Team> queryWrapper = new QueryWrapper<>();
+        // 组合查询条件
         if (teamQuery != null) {
             Long id = teamQuery.getId();
             if (id != null && id > 0) {
@@ -146,13 +147,16 @@ public class TeamServiceImpl extends ServiceImpl<TeamMapper, Team>
                 queryWrapper.like("description", description);
             }
             Integer maxNum = teamQuery.getMaxNum();
+            // 查询最大人数相等的
             if (maxNum != null && maxNum > 0) {
                 queryWrapper.eq("maxNum", maxNum);
             }
             Long userId = teamQuery.getUserId();
+            // 根据创建人来查询
             if (userId != null && userId > 0) {
                 queryWrapper.eq("userId", userId);
             }
+            // 根据状态来查询
             Integer status = teamQuery.getStatus();
             TeamStatusEnum statusEnum = TeamStatusEnum.getEnumByValue(status);
             if (statusEnum == null) {
@@ -164,6 +168,7 @@ public class TeamServiceImpl extends ServiceImpl<TeamMapper, Team>
             queryWrapper.eq("status", statusEnum.getValue());
         }
         // 不展示已过期的队伍
+        // expireTime is null or expireTime > now()
         queryWrapper.and(qw -> qw.gt("expireTime", new Date()).or().isNull("expireTime"));
         List<Team> teamList = this.list(queryWrapper);
         if (CollectionUtils.isEmpty(teamList)) {
@@ -189,6 +194,7 @@ public class TeamServiceImpl extends ServiceImpl<TeamMapper, Team>
         }
         return teamUserVOList;
     }
+
 
     @Override
     public boolean updateTeam(TeamUpdateRequest teamUpdateRequest, User loginUser) {

@@ -34,7 +34,7 @@ public interface TeamService extends IService<Team> {
      * @param isAdmin
      * @return
      */
-    List<TeamUserVO> listTeam(TeamQuery teamQuery, boolean isAdmin);
+    List<TeamUserVO> listTeams(TeamQuery teamQuery, boolean isAdmin);
 
     /**
      * 更新队伍
